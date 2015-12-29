@@ -21,7 +21,6 @@ namespace SACISearcher
         List<string> drawing = new List<string>();
         List<string> xlss = new List<string>();
         System.Data.DataTable testExcel = null;
-
         string path1 = "";
         string path2 = "";
         string path3 = "";
@@ -32,7 +31,7 @@ namespace SACISearcher
         public MainSearchForm()
         {
             InitializeComponent();
-
+           
         }
 
         private void work(string extension, List<string> lists)
@@ -54,8 +53,8 @@ namespace SACISearcher
         private void button1_Click(object sender, EventArgs e)
         {
             //Apply new connect string
-            string org = DbHelperSQL.connectionString;
-            DbHelperSQL.connectionString = "Database='state';Data Source='192.168.3.32';User Id='partquery';Password='222222';CharSet = utf8";
+           // string org = DbHelperSQL.connectionString;
+          //  DbHelperSQL.connectionString = "Database='state';Data Source='192.168.3.32';User Id='partquery';Password='222222';CharSet = utf8";
             List<string> lists = new List<string>();
 
             lists = richTextBox1.Text.Split(new Char[2] { '\r', '\n' }, System.StringSplitOptions.RemoveEmptyEntries).ToList();
@@ -87,7 +86,7 @@ namespace SACISearcher
 
               }
           }
-            DbHelperSQL.connectionString = org;
+          //  DbHelperSQL.connectionString = org;
 
         }
 
@@ -462,11 +461,6 @@ namespace SACISearcher
 
 
 
-        private void database_ToolStripMenuItem_Click(object sender, EventArgs e)
-        {
-            user_key f = new user_key();
-            f.Show();
-        }
 
         private void 库存查询ToolStripMenuItem_Click(object sender, EventArgs e)
         {
@@ -479,6 +473,14 @@ namespace SACISearcher
             checkedListBox1.Items.Clear();
         }
 
+        private void fTP管理ToolStripMenuItem_Click(object sender, EventArgs e)
+        {
 
+        }
+
+        private void MainSearchForm_Load(object sender, EventArgs e)
+        {
+
+        }
     }
 }

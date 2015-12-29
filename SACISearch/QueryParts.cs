@@ -23,6 +23,14 @@ namespace DBQuery
     }
     public static  class QueryParts
     {
+
+
+      
+
+       
+
+
+
         private static string[] QueryItems = new string[]
 {
                     "查询图号",
@@ -51,6 +59,8 @@ namespace DBQuery
        public static string database = (string)(localMethod.GetConfigValue("MONGO_DATABASE", "PartDBCfg.py"));
         public static string col = (string)(localMethod.GetConfigValue("PART_MONGO_COLNAME", "PartDBCfg.py"));
         public static string FTP_col = (string)(localMethod.GetConfigValue("FTP_PART_MONGO_COLNAME", "PartDBCfg.py"));
+      static  MongoMethod4 mmlocal = new MongoMethod4(client, database, col);
+      static  MongoMethod4 mmFTP = new MongoMethod4(client, database, FTP_col);
         public static  DataTable queryDataList(string extension, List<string> lists)
         {
 
@@ -82,6 +92,7 @@ namespace DBQuery
 
        public static Dictionary<string, string> queryData(string extension, string partNameQuery)
         {
+            
 
             partNameQuery = partNameQuery.ToUpper();
             // extension is the type of query Date,Drawing,CATPart or pdf
@@ -343,8 +354,7 @@ namespace DBQuery
 
                 rtarry["有效架次"] = effectDic["有效性"];
                 //搜索path表，给出文件路径
-                MongoMethod4 mmlocal = new MongoMethod4(client, database, col);
-                 MongoMethod4 mmFTP = new MongoMethod4(client, database, FTP_col);
+
                 var c1 = new BsonRegularExpression("/SP/");
                 var c2 = new BsonRegularExpression("/^" + insertspace(partNameTrunk) + "/");
                 var c22 = new BsonRegularExpression("/^" + insertspace(effectDic["文件名"]) + "/");
