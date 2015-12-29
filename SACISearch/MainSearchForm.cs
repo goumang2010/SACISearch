@@ -38,8 +38,13 @@ namespace SACISearcher
         private void work(string extension, List<string> lists)
         {
             var dt = DBQuery.QueryParts.queryDataList(extension, lists);
-            checkedListBox1.Items.AddRange(dt.Select().Select(p => p["Href"].ToString()).ToArray());
-          dynamic wSheet=  OFFICE_Method.excelMethod.SaveDataTableToExcel(DBQuery.QueryParts.queryDataList(extension,lists));
+            var hrefarray = from pp in dt.AsEnumerable()
+                            let hs = pp["Href"].ToString()
+                            where hs != ""
+                            select hs;
+
+            checkedListBox1.Items.AddRange(hrefarray.ToArray());
+          dynamic wSheet=  OFFICE_Method.excelMethod.SaveDataTableToExcel(dt);
             wSheet.Range["C:D"].ColumnWidth = 15;
 
         }
@@ -241,36 +246,29 @@ namespace SACISearcher
             FolderBrowserDialog fbd = new FolderBrowserDialog();
             fbd.SelectedPath = "";// 设置默认路径
             DialogResult ret = fbd.ShowDialog();
-        //    string strCollected = string.Empty;
+            //    string strCollected = string.Empty;
 
-          
+
             for (int i = 0; i < checkedListBox1.Items.Count; i++)
             {
-               
+
                 if (checkedListBox1.GetItemChecked(i))
                 {
 
-                        string filename = checkedListBox1.GetItemText(
-         checkedListBox1.Items[i]);
-                        if (!filename.Contains("ftp"))
-                        { 
-                           string[] tempnamestr= filename.Split('\\');
-                           string shortname = tempnamestr[tempnamestr.Count() - 1];
-                           File.Copy(filename, fbd.SelectedPath +"\\"+ shortname, true);
-                       // MessageBox.Show("下载完成");
+                    string filename = checkedListBox1.GetItemText(checkedListBox1.Items[i]);
+                    if (!filename.Contains("ftp"))
+                    {
+                        string[] tempnamestr = filename.Split('\\');
+                        string shortname = tempnamestr[tempnamestr.Count() - 1];
+                        File.Copy(filename, fbd.SelectedPath + "\\" + shortname, true);
+                        // MessageBox.Show("下载完成");
+                    }
+                    else
+                    {
+                        string[] tempnamestr = filename.Split('/');
+                        string shortname = tempnamestr[tempnamestr.Count() - 1];
 
-                             }
-               
-            
-                  else
-                  {
-
-
-
-               string[] tempnamestr = filename.Split('/');
-               string shortname = tempnamestr[tempnamestr.Count() - 1];
-
-               string FileName = fbd.SelectedPath + "\\" + shortname;
+                        string FileName = fbd.SelectedPath + "\\" + shortname;
                         string FileNameftp = filename;
                         int allbye = this.GetFtpFileSize(FileNameftp);
                         //创建一个文件流
@@ -278,21 +276,13 @@ namespace SACISearcher
                         Stream responseStream = null;
                         try
                         {
-                            string ftp_addr = (string)(localMethod.GetConfigValue("FTP_ADDR", "PartDBCfg.py"));
-                            string ftp_user = (string)(localMethod.GetConfigValue("FTP_USER", "PartDBCfg.py"));
-                            string ftp_key = (string)(localMethod.GetConfigValue("FTP_KEY", "PartDBCfg.py"));
-                            var saciftp = new FtpOperation(ftp_addr, ftp_user, ftp_key);
-                            
-                            //创建一个与FTP服务器联系的FtpWebRequest对象
-                            FtpWebRequest request = (FtpWebRequest)WebRequest.Create(FileNameftp);
-                            //设置请求的方法是FTP文件下载
-                            request.Method = WebRequestMethods.Ftp.DownloadFile;
 
-                            //连接登录FTP服务器
-                            //request.Credentials = new NetworkCredential(ftpUserID, ftpPassword);
+                            var saciftp = new FtpOperation();
+
+
 
                             //获取一个请求响应对象
-                            FtpWebResponse response = (FtpWebResponse)request.GetResponse();
+                            FtpWebResponse response = saciftp.Download(filename);
 
                             //获取请求的响应流
                             responseStream = response.GetResponseStream();

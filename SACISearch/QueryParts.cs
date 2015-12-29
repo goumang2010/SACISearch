@@ -327,7 +327,7 @@ namespace DBQuery
             StringBuilder strSql_effect = new StringBuilder();
             strSql_effect.Append("select 文件名,图号,文件版次,有效性 from effect_data ");
 
-            if (/*extension == "CATDrawing"||*/ !rtarry["查询图号"].Contains('-'))
+            if (/*extension == "CATDrawing"||*/ (!rtarry["查询图号"].Contains('-'))||((extension == "CATDrawing"|| extension == "CATProduct") && rtarry["有效构型号"].Contains("001")))
             {
                 strSql_effect.Append(string.Format("where 基本号='{0}' and 数据类型='{1}' order by 文件版次 desc;", partNameTrunk, extension));
             }
