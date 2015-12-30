@@ -26,7 +26,7 @@
     <UpdateUrl>\\192.168.3.32\softwareTools\SACI_SEARCH\update\</UpdateUrl>
     <PublisherName>李钟宁</PublisherName>
     <OpenBrowserOnPublish>false</OpenBrowserOnPublish>
-    <ApplicationRevision>6</ApplicationRevision>
+    <ApplicationRevision>7</ApplicationRevision>
     <ApplicationVersion>4.4.0.%2a</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
     <CreateDesktopShortcut>true</CreateDesktopShortcut>
@@ -268,9 +268,9 @@
       <Project>{41f56599-8d65-48b1-ac56-99e8d146bc2d}</Project>
       <Name>GoumangToolKit</Name>
     </ProjectReference>
-    <ProjectReference Include="..\..\OFFICE_Method\OFFICE_Method\OFFICE_Method.vbproj">
+    <ProjectReference Include="..\..\GoumangToolKit\OfficeMethod\OfficeMethod.vbproj">
       <Project>{78d7e043-4963-44c0-9631-9e9549eafe91}</Project>
-      <Name>OFFICE_Method</Name>
+      <Name>OfficeMethod</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

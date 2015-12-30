@@ -23,14 +23,6 @@ namespace DBQuery
     }
     public static  class QueryParts
     {
-
-
-      
-
-       
-
-
-
         private static string[] QueryItems = new string[]
 {
                     "查询图号",
@@ -88,8 +80,6 @@ namespace DBQuery
 
             return null;
         }
-
-
        public static Dictionary<string, string> queryData(string extension, string partNameQuery)
         {
             
@@ -105,11 +95,11 @@ namespace DBQuery
             rtarry["查询图号"] = partNameQuery.Trim();
 
             //查询EBOM
-            Action<string> ebomfill = delegate (string partnum)
+            Func<string,bool?> ebomfill = delegate (string partnum)
             {
                 StringBuilder strSql = new StringBuilder();
                 strSql.Append("select NHA,TITLE,QUANTITY,LEVEL,PARTNUMBER,WORKPACKAGE,MATERIALSPECIFICATIONS from partstate ");
-                strSql.Append(string.Format("where PARTNUMBER='{0}';", (partnum)));
+                strSql.Append(string.Format("where PARTNUMBER like '{0}%';", (partnum)));
                 var ebomDic = DbHelperSQL.getDicOneRow(strSql.ToString());
                 if (ebomDic.Count > 0)
                 {
@@ -161,6 +151,11 @@ namespace DBQuery
                             }
                         }
                     }
+                    return true;
+                }
+                else
+                {
+                    return null;
                 }
             };
             //查询MBOM，返回分工信息
@@ -180,7 +175,6 @@ namespace DBQuery
 
                 }
             };
-
             //查询标准件
             Action<string> SPfill = delegate (string partnum)
             {
@@ -202,35 +196,129 @@ namespace DBQuery
 
 
             };
+            //查询有效数据集填充
+            Func<string,string> effectfill = delegate (string partnum)
+            {
+                //有效数据集给出有效图号、有效版次和有效架次
+                //仅查询基本号，匹配有效图号
+                StringBuilder strSql_effect = new StringBuilder();
+                strSql_effect.Append("select 文件名,图号,文件版次,有效性 from effect_data ");
 
-            //temp filter the standard parts
-            if (partNameQuery.First() != 'C')
-            {
-                SPfill(rtarry["查询图号"]);
-                return rtarry;
-            }
-            else
-            {
-                if (partNameQuery.Count() > 13 || partNameQuery.Count() < 9)
+                if (/*extension == "CATDrawing"||*/ (!rtarry["查询图号"].Contains('-')) || ((extension == "CATDrawing" || extension == "CATProduct") && rtarry["有效构型号"].Contains("001")))
                 {
-                    ebomfill(rtarry["查询图号"]);
-                    mbomfill(rtarry["查询图号"]);
-                    return rtarry;
+                    strSql_effect.Append(string.Format("where 基本号='{0}' and 数据类型='{1}' order by 文件版次 desc;", partnum.Split('-')[0], extension));
                 }
+                else
+                {
+                    strSql_effect.Append(string.Format("where 图号='{0}' and 数据类型='{1}' order by 文件版次 desc;", rtarry["查询图号"], extension));
+                }
+                var effectDic = DbHelperSQL.getDicOneRow(strSql_effect.ToString());
 
-            }
+                if (effectDic.Count > 0)
+                {
 
 
+                   // rtarry["查询图号"] = effectDic["文件名"];
+                    rtarry["有效版次"] = effectDic["文件版次"];
+                    rtarry["有效架次"] = effectDic["有效性"];
+                    //搜索path表，给出文件路径
+                    return effectDic["文件名"];
 
 
-            var nameFormat = partNameQuery.Split('-');
-            string partNameTrunk = nameFormat[0].Trim();
-            string partRev;
+                }
+                else
+                {
+                    return null;
+                }
+            };
+            //查询路径数据库
+            Func<string,bool?> pathfill = delegate (string partnum)
+              {
+                  var c1 = new BsonRegularExpression("/SP/");
+                  var c2 = new BsonRegularExpression("/^" + insertspace(partnum.Split('-')[0]) + "/");
+                  var c22 = new BsonRegularExpression("/^" + insertspace(partnum) + "/");
+                  var c3 = new BsonRegularExpression("/" + extension + "/");
+                  var query = new QueryDocument("FileName", c22);
+                  var sortBy = SortBy.Descending("Rev");
 
-            //查询最新构型号
-            Func<int, int, Func<string, string>, string> queryBatch = delegate (int maxrev, int step, Func<string, string> queryStr)
+                  var dt_path = mmlocal.collection.Find(query).SetSortOrder(sortBy);
+
+
+                  //如果Z盘查询不到，则在FTP中查询
+                  if (dt_path.Count() == 0)
+                  {
+
+                      query = new QueryDocument("FileName", c22);
+                      sortBy = SortBy.Descending("Rev");
+
+                      dt_path = mmFTP.collection.Find(query).SetSortOrder(sortBy);
+
+                  }
+                  //再次判断
+                  if (dt_path.Count() != 0)
+                  {
+                      //添加路径
+                      string strHyperlinks = dt_path.First()["FilePath"].AsString;
+
+                      rtarry["有效地址"] = "=HYPERLINK(\"" + strHyperlinks + "\", \"" + strHyperlinks + "\")"; ;
+                      rtarry["Href"] = strHyperlinks;
+
+                  }
+                  //无有效地址时，使用旧版地址
+                  else
+                  {
+
+                      var ba = new BsonArray();
+                      var nba = new BsonArray();
+                      nba.Add(new BsonDocument { { "FileName", c1 } });
+
+                      ba.Add(new BsonDocument { { "FileName", c2 } });
+                      ba.Add(new BsonDocument { { "$nor", nba } });
+                      ba.Add(new BsonDocument { { "Extention", c3 } });
+
+                      query = new QueryDocument { { "$and", ba } };
+
+                      dt_path = mmlocal.collection.Find(query).SetSortOrder(sortBy);
+
+
+                      if (dt_path.Count() != 0)
+                      {
+                          string strHyperlinks = dt_path.First()["FilePath"].AsString;
+
+                          rtarry["旧版地址"] = "=HYPERLINK(\"" + strHyperlinks + "\", \"" + strHyperlinks + "\")";
+                          rtarry["Href"] = strHyperlinks;
+                      }
+                      else
+                      {
+                          return false;
+
+
+                      }
+                    
+
+                  }
+                  return null;
+              };
+            //查询库存表
+            Action<string> storefill = delegate (string partnum)
             {
-                for (int kk = maxrev; kk > 0; kk -= step)
+                //查询库存表
+                StringBuilder strSql_store = new StringBuilder();
+                strSql_store.Append(string.Format("select 最后架次,单机数,结存,工位号 from store_state where 零件号 like '{0}%';", rtarry["查询图号"]));
+                var storeDic = DbHelperSQL.getDicOneRow(strSql_store.ToString());
+                if (storeDic.Count > 0)
+                {
+                    rtarry["最后发件架次"] = storeDic["最后架次"];
+                    rtarry["配套单机数"] = storeDic["单机数"];
+                    rtarry["库房结存"] = storeDic["结存"];
+                    rtarry["工位号"] = storeDic["工位号"];
+                }
+            };
+            //查询最新构型号
+            Func<string, int, Func<string, string>, string> queryBatch = delegate (string partNameTrunk, int basenum, Func<string, string> queryStr)
+            {
+                var minnum = ((basenum - 6) < 0) ? 0 : (basenum - 6);
+                for (int kk = basenum+4; kk >=minnum; kk -=2)
                 {
 
                     string newname = partNameTrunk + "-" + kk.ToString().PadLeft(3, '0');
@@ -247,192 +335,145 @@ namespace DBQuery
 
                 return null;
             };
-
-
-            if (nameFormat.Count() > 1)
+            //填充构型号
+            Func<string,int,string> revfill = delegate (string partNameTrunk, int basenum)
             {
-                partRev = nameFormat[1].Trim();
-
-                if (partRev.Count() != 3)
-                {
-                    ebomfill(rtarry["查询图号"]);
-                    mbomfill(rtarry["查询图号"]);
-                    rtarry["下级装配号"] = "";
-                    return rtarry;
-
-                }
-
-                int partRevint = Convert.ToInt32(partRev);
-
-                //查询有效数据集,确定有效数据集中最新的构型号
-
-
-                rtarry["有效构型号"] = queryBatch(partRevint + 6, 2, delegate (string newname)
+                
+                rtarry["有效构型号"] = queryBatch(partNameTrunk, basenum, delegate (string newname)
                 {
                     return "select 图号 from effect_data where 图号 like '" + newname + "%';";
-                }
-
-                );
-                //查询ebom,确定ebom中最新的构型号
+                });
 
 
-                rtarry["EBOM构型号"] = queryBatch(partRevint + 6, 2, delegate (string newname)
+                rtarry["EBOM构型号"] = queryBatch(partNameTrunk, basenum, delegate (string newname)
                 {
                     return "select PARTNUMBER from partstate where PARTNUMBER like '" + newname + "%';";
                 });
-                //查询库存表,确定库存中最新的构型号
-
-                rtarry["库存构型号"] = queryBatch(partRevint + 6, 2, delegate (string newname)
+                rtarry["库存构型号"] = queryBatch(partNameTrunk, basenum, delegate (string newname)
                 {
                     return "select 零件号 from store_state where 零件号 like '" + newname + "%';";
                 });
 
 
+                return rtarry["有效构型号"] ?? rtarry["EBOM构型号"] ?? rtarry["库存构型号"];
+
+            };
 
 
+            //temp filter the standard parts
+            //标准件时
+            if (partNameQuery.First() != 'C')
+            {
+                SPfill(rtarry["查询图号"]);
+                pathfill(rtarry["查询图号"]);
 
-
+                return rtarry;
             }
             else
             {
-                //如果是零件，则查询有效数据集，已最新的构型号作为构型号
-                if (extension == "CATPart")
+                var nameFormat = partNameQuery.Split('-');
+                string partNameTrunk = nameFormat[0].Trim();
+                var tmct = nameFormat.Count();
+                if ((partNameQuery.Count() > 15 || partNameQuery.Count() < 9) && tmct != 2)
                 {
-
-                    rtarry["有效构型号"] = queryBatch(10, 1, delegate (string newname)
-                    {
-                        return "select 图号 from effect_data where 图号 like '" + newname + "%';";
-                    });
-
-
-                    rtarry["EBOM构型号"] = queryBatch(10, 1, delegate (string newname)
-                    {
-                        return "select PARTNUMBER from partstate where PARTNUMBER like '" + newname + "%';";
-                    });
-                    rtarry["库存构型号"] = queryBatch(10, 1, delegate (string newname)
-                    {
-                        return "select 零件号 from store_state where 零件号 like '" + newname + "%';";
-                    });
-
-                    rtarry["查询图号"] = partNameTrunk + "-" + rtarry["有效构型号"];
-
-
-
+                    //未知的零件或其他
+                    //15为最大字符，如C01323100-N0001
+                    ebomfill(rtarry["查询图号"]);
+                    mbomfill(rtarry["查询图号"]);
+                    pathfill(rtarry["查询图号"]);
+                    return rtarry;
                 }
                 else
                 {
+                    mbomfill(rtarry["查询图号"]);
 
-                    rtarry["查询图号"] = partNameTrunk;
-                    rtarry["EBOM构型号"] = "001";
-
-                }
-            }
-
-            //查询ebom,填充信息
-            ebomfill(partNameTrunk + "-" + rtarry["EBOM构型号"]);
-            mbomfill(partNameTrunk + "-" + rtarry["EBOM构型号"]);
-            //查询有效数据集,填充信息
-
-            //有效数据集给出有效图号、有效版次和有效架次
-            //仅查询基本号，匹配有效图号
-            StringBuilder strSql_effect = new StringBuilder();
-            strSql_effect.Append("select 文件名,图号,文件版次,有效性 from effect_data ");
-
-            if (/*extension == "CATDrawing"||*/ (!rtarry["查询图号"].Contains('-'))||((extension == "CATDrawing"|| extension == "CATProduct") && rtarry["有效构型号"].Contains("001")))
-            {
-                strSql_effect.Append(string.Format("where 基本号='{0}' and 数据类型='{1}' order by 文件版次 desc;", partNameTrunk, extension));
-            }
-            else
-            {
-                strSql_effect.Append(string.Format("where 图号='{0}' and 数据类型='{1}' order by 文件版次 desc;", rtarry["查询图号"], extension));
-            }
-            var effectDic = DbHelperSQL.getDicOneRow(strSql_effect.ToString());
-
-            if (effectDic.Count > 0)
-            {
-                rtarry["有效版次"] = effectDic["文件版次"];
-
-                rtarry["有效架次"] = effectDic["有效性"];
-                //搜索path表，给出文件路径
-
-                var c1 = new BsonRegularExpression("/SP/");
-                var c2 = new BsonRegularExpression("/^" + insertspace(partNameTrunk) + "/");
-                var c22 = new BsonRegularExpression("/^" + insertspace(effectDic["文件名"]) + "/");
-                var c3 = new BsonRegularExpression("/" + extension + "/");
-                var query = new QueryDocument("FileName", c22);
-                var sortBy = SortBy.Descending("Rev");
-
-                var dt_path = mmlocal.collection.Find(query).SetSortOrder(sortBy);
-
-
-                //如果Z盘查询不到，则在FTP中查询
-                if (dt_path.Count() == 0)
-                {
-
-                     query = new QueryDocument("FileName", c22);
-                    sortBy = SortBy.Descending("Rev");
-
-                     dt_path = mmFTP.collection.Find(query).SetSortOrder(sortBy);
-
-                }
-                //再次判断
-                if (dt_path.Count() != 0)
-                {
-                    //添加路径
-                    string strHyperlinks = dt_path.First()["FilePath"].AsString;
-
-                    rtarry["有效地址"] = "=HYPERLINK(\"" + strHyperlinks + "\", \"" + strHyperlinks + "\")"; ;
-                    rtarry["Href"] = strHyperlinks;
-
-                }
-                //无有效地址时，使用旧版地址
-                else
-                {
-
-                    var ba = new BsonArray();
-                    var nba= new BsonArray();
-                    nba.Add(new BsonDocument { { "FileName", c1 } });
-
-                    ba.Add(new BsonDocument { { "FileName", c2 } });
-                    ba.Add( new BsonDocument { { "$nor",nba }});
-                    ba.Add(new BsonDocument {  { "Extention",c3} });
-
-                    query = new QueryDocument { { "$and", ba } };
-
-                    dt_path = mmlocal.collection.Find(query).SetSortOrder(sortBy);
-
-
-                    if (dt_path.Count()!= 0)
+                    //带有构型号的情况
+                    if (tmct == 2)
                     {
-                        string strHyperlinks = dt_path.First()["FilePath"].AsString;
 
-                        rtarry["旧版地址"] = "=HYPERLINK(\"" + strHyperlinks + "\", \"" + strHyperlinks + "\")";
-                        rtarry["Href"] = strHyperlinks;
+
+                        string partRev = nameFormat[1].Trim();
+                        var f = ebomfill(rtarry["查询图号"]) ?? ebomfill(partNameTrunk);
+
+                        //-N00X的情况
+                        if (partRev.Count() != 3)
+                        {
+
+                            pathfill(effectfill(rtarry["查询图号"]) ?? rtarry["查询图号"]);
+
+                            return rtarry;
+
+                        }
+                        //正常 基本号+构型号情况
+                        else
+                        {
+                            //填充构型号
+                            revfill(partNameTrunk, System.Convert.ToInt16(partRev));
+                            //填充库存构型号
+                            storefill(partNameTrunk + "-" + rtarry["库存构型号"]);
+                            //在有效数据集中查找到该号
+                            var filename = effectfill(rtarry["查询图号"]);
+                            if (filename != null)
+                            {
+                                pathfill(rtarry["查询图号"]);
+
+
+                            }
+
+                            else
+                            {
+                                //有效数据集中未找到,定位新的构型号
+                                string newpartnum = partNameTrunk + "-" + rtarry["有效构型号"];
+                                var r = (pathfill(effectfill(newpartnum) ?? newpartnum)) ?? pathfill(rtarry["查询图号"]);
+
+
+
+                            }
+
+                        }
+
                     }
+                    //不带有构型号的情况
                     else
                     {
-                        throw new Exception("请确认是否选择了文件的正确类型！");
+                        //填充构型号
+                        revfill(partNameTrunk, 6);
+                        //如果是零件
+                        if (extension == "CATPart")
+                        {
+
+                            string newpartnum = partNameTrunk + "-" + rtarry["有效构型号"];
+                            var r = (pathfill(effectfill(newpartnum) ?? newpartnum)) ?? pathfill(rtarry["查询图号"]);
+                            ebomfill(partNameTrunk + "-" + rtarry["EBOM构型号"]);
+                            storefill(partNameTrunk + "-" + rtarry["库存构型号"]);
+
+
+
+
+                        }
+                        else
+                        //如果不是零件
+                        {
+                            ebomfill(partNameTrunk + "-" + rtarry["EBOM构型号"]);
+
+                            storefill(partNameTrunk + "-" + rtarry["库存构型号"]);
+                            pathfill(effectfill(rtarry["查询图号"]) ?? rtarry["查询图号"]);
+
+
+                        }
+
+
 
 
                     }
 
+
                 }
-                
+
             }
 
 
 
-            //查询库存表
-            StringBuilder strSql_store = new StringBuilder();
-            strSql_store.Append(string.Format("select 最后架次,单机数,结存,工位号 from store_state where 零件号 like '{0}%';", rtarry["查询图号"]));
-            var storeDic = DbHelperSQL.getDicOneRow(strSql_store.ToString());
-            if (storeDic.Count > 0)
-            {
-                rtarry["最后发件架次"] = storeDic["最后架次"];
-                rtarry["配套单机数"] = storeDic["单机数"];
-                rtarry["库房结存"] = storeDic["结存"];
-                rtarry["工位号"] = storeDic["工位号"];
-            }
             return rtarry;
         }
 
