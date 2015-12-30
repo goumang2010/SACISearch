@@ -204,13 +204,13 @@ namespace DBQuery
                 StringBuilder strSql_effect = new StringBuilder();
                 strSql_effect.Append("select 文件名,图号,文件版次,有效性 from effect_data ");
 
-                if (/*extension == "CATDrawing"||*/ (!rtarry["查询图号"].Contains('-')) || ((extension == "CATDrawing" || extension == "CATProduct") && rtarry["有效构型号"].Contains("001")))
+                if (/*extension == "CATDrawing"||*/ (!partnum.Contains('-')) || ((extension == "CATDrawing" || extension == "CATProduct") && rtarry["有效构型号"].Contains("001")))
                 {
                     strSql_effect.Append(string.Format("where 基本号='{0}' and 数据类型='{1}' order by 文件版次 desc;", partnum.Split('-')[0], extension));
                 }
                 else
                 {
-                    strSql_effect.Append(string.Format("where 图号='{0}' and 数据类型='{1}' order by 文件版次 desc;", rtarry["查询图号"], extension));
+                    strSql_effect.Append(string.Format("where 图号='{0}' and 数据类型='{1}' order by 文件版次 desc;", partnum, extension));
                 }
                 var effectDic = DbHelperSQL.getDicOneRow(strSql_effect.ToString());
 
@@ -235,8 +235,8 @@ namespace DBQuery
             Func<string,bool?> pathfill = delegate (string partnum)
               {
                   var c1 = new BsonRegularExpression("/SP/");
-                  var c2 = new BsonRegularExpression("/^" + insertspace(partnum.Split('-')[0]) + "/");
-                  var c22 = new BsonRegularExpression("/^" + insertspace(partnum) + "/");
+                  var c2 = new BsonRegularExpression("/^" + partnum.Split('-')[0] + "/");
+                  var c22 = new BsonRegularExpression("/^" +  insertspace(partnum) + "/");
                   var c3 = new BsonRegularExpression("/" + extension + "/");
                   var query = new QueryDocument("FileName", c22);
                   var sortBy = SortBy.Descending("Rev");
@@ -262,7 +262,7 @@ namespace DBQuery
 
                       rtarry["有效地址"] = "=HYPERLINK(\"" + strHyperlinks + "\", \"" + strHyperlinks + "\")"; ;
                       rtarry["Href"] = strHyperlinks;
-
+                      return true;
                   }
                   //无有效地址时，使用旧版地址
                   else
@@ -315,10 +315,10 @@ namespace DBQuery
                 }
             };
             //查询最新构型号
-            Func<string, int, Func<string, string>, string> queryBatch = delegate (string partNameTrunk, int basenum, Func<string, string> queryStr)
+            Func<string, int, int, Func<string, string>, string> queryBatch = delegate (string partNameTrunk, int basenum, int step, Func<string, string> queryStr)
             {
                 var minnum = ((basenum - 6) < 0) ? 0 : (basenum - 6);
-                for (int kk = basenum+4; kk >=minnum; kk -=2)
+                for (int kk = basenum+4; kk >=minnum; kk -=step)
                 {
 
                     string newname = partNameTrunk + "-" + kk.ToString().PadLeft(3, '0');
@@ -336,20 +336,20 @@ namespace DBQuery
                 return null;
             };
             //填充构型号
-            Func<string,int,string> revfill = delegate (string partNameTrunk, int basenum)
+            Func<string,int,int,string> revfill = delegate (string partNameTrunk, int basenum,int step)
             {
                 
-                rtarry["有效构型号"] = queryBatch(partNameTrunk, basenum, delegate (string newname)
+                rtarry["有效构型号"] = queryBatch(partNameTrunk, basenum,step, delegate (string newname)
                 {
                     return "select 图号 from effect_data where 图号 like '" + newname + "%';";
                 });
 
 
-                rtarry["EBOM构型号"] = queryBatch(partNameTrunk, basenum, delegate (string newname)
+                rtarry["EBOM构型号"] = queryBatch(partNameTrunk, basenum,step, delegate (string newname)
                 {
                     return "select PARTNUMBER from partstate where PARTNUMBER like '" + newname + "%';";
                 });
-                rtarry["库存构型号"] = queryBatch(partNameTrunk, basenum, delegate (string newname)
+                rtarry["库存构型号"] = queryBatch(partNameTrunk, basenum, step, delegate (string newname)
                 {
                     return "select 零件号 from store_state where 零件号 like '" + newname + "%';";
                 });
@@ -374,7 +374,8 @@ namespace DBQuery
                 var nameFormat = partNameQuery.Split('-');
                 string partNameTrunk = nameFormat[0].Trim();
                 var tmct = nameFormat.Count();
-                if ((partNameQuery.Count() > 15 || partNameQuery.Count() < 9) && tmct != 2)
+                var namelenth = partNameQuery.Count();
+                if ((namelenth > 15 || namelenth < 9) && tmct != 2)
                 {
                     //未知的零件或其他
                     //15为最大字符，如C01323100-N0001
@@ -401,14 +402,14 @@ namespace DBQuery
 
                             pathfill(effectfill(rtarry["查询图号"]) ?? rtarry["查询图号"]);
 
-                            return rtarry;
+          
 
                         }
                         //正常 基本号+构型号情况
                         else
                         {
                             //填充构型号
-                            revfill(partNameTrunk, System.Convert.ToInt16(partRev));
+                            revfill(partNameTrunk, System.Convert.ToInt16(partRev),2);
                             //填充库存构型号
                             storefill(partNameTrunk + "-" + rtarry["库存构型号"]);
                             //在有效数据集中查找到该号
@@ -437,7 +438,7 @@ namespace DBQuery
                     else
                     {
                         //填充构型号
-                        revfill(partNameTrunk, 6);
+                        revfill(partNameTrunk, 6,1);
                         //如果是零件
                         if (extension == "CATPart")
                         {
@@ -455,7 +456,6 @@ namespace DBQuery
                         //如果不是零件
                         {
                             ebomfill(partNameTrunk + "-" + rtarry["EBOM构型号"]);
-
                             storefill(partNameTrunk + "-" + rtarry["库存构型号"]);
                             pathfill(effectfill(rtarry["查询图号"]) ?? rtarry["查询图号"]);
 
@@ -491,7 +491,7 @@ namespace DBQuery
                 }
                 else
                 {
-                    aa = aa.Replace("-", " -");
+                    //aa = aa.Replace("-", " -");
                 }
             }
             return aa;

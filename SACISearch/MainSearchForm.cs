@@ -43,7 +43,7 @@ namespace SACISearcher
                             select hs;
 
             checkedListBox1.Items.AddRange(hrefarray.ToArray());
-          dynamic wSheet=  OFFICE_Method.excelMethod.SaveDataTableToExcel(dt);
+          dynamic wSheet=  OfficeMethod.excelMethod.SaveDataTableToExcel(dt);
             wSheet.Range["C:D"].ColumnWidth = 15;
 
         }
